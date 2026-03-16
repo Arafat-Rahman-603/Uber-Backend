@@ -1,7 +1,35 @@
 import riderModel from "../models/rider.model.js";
 import blacklistTokenModel from "../models/blacklistToken.model.js";
+import otpModel from "../models/otp.model.js";
 import { validationResult } from "express-validator";
 import Ride from "../models/ride.model.js";
+import { sendOtpEmail } from "../services/email.service.js";
+
+// Generate a random 6-digit OTP
+const generateOtp = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+export const sendOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    // Delete any existing OTP for this email
+    await otpModel.deleteMany({ email });
+
+    const otp = generateOtp();
+    await otpModel.create({ email, otp });
+    await sendOtpEmail(email, otp);
+
+    res.status(200).json({ message: "OTP sent successfully" });
+  } catch (error) {
+    console.error("Error sending OTP:", error);
+    res.status(500).json({ message: "Failed to send OTP", error: error.message });
+  }
+};
 
 export const registerRider = async (req, res) => {
   const errors = validationResult(req);
@@ -10,11 +38,18 @@ export const registerRider = async (req, res) => {
     return res.status(400).json({ errors: errors.array() });
   }
   try {
-    const { fullName, email, password, vehicle } = req.body;
+    const { fullName, email, password, vehicle, otp } = req.body;
 
-    if (!fullName || !email || !password || !vehicle) {
-      return res.status(400).json({ message: "All fields are required" });
+    if (!fullName || !email || !password || !vehicle || !otp) {
+      return res.status(400).json({ message: "All fields are required including OTP" });
     }
+
+    // Verify OTP
+    const otpRecord = await otpModel.findOne({ email, otp });
+    if (!otpRecord) {
+      return res.status(400).json({ message: "Invalid or expired OTP" });
+    }
+
     const riderExists = await riderModel.findOne({ email });
 
     if (riderExists) {
@@ -35,6 +70,9 @@ export const registerRider = async (req, res) => {
         capacity: vehicle.capacity,
       },
     });
+
+    // Clean up used OTP
+    await otpModel.deleteMany({ email });
 
     const token = rider.generateToken();
     res.cookie("token", token, { httpOnly: true, maxAge: 24 * 60 * 60 * 1000 });

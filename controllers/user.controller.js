@@ -1,6 +1,34 @@
 import userModel from "../models/user.model.js";
+import otpModel from "../models/otp.model.js";
 import { validationResult } from "express-validator";
 import blacklistTokenModel from "../models/blacklistToken.model.js";
+import { sendOtpEmail } from "../services/email.service.js";
+
+// Generate a random 6-digit OTP
+const generateOtp = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+export const sendOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    // Delete any existing OTP for this email
+    await otpModel.deleteMany({ email });
+
+    const otp = generateOtp();
+    await otpModel.create({ email, otp });
+    await sendOtpEmail(email, otp);
+
+    res.status(200).json({ message: "OTP sent successfully" });
+  } catch (error) {
+    console.error("Error sending OTP:", error);
+    res.status(500).json({ message: "Failed to send OTP", error: error.message });
+  }
+};
 
 export const registerUser = async (req, res, next) => {
   const errors = validationResult(req);
@@ -8,15 +36,21 @@ export const registerUser = async (req, res, next) => {
     return res.status(400).json({ errors: errors.array() });
   }
 
-  const { fullName, email, password } = req.body;
+  const { fullName, email, password, otp } = req.body;
 
-   const userExists = await userModel.findOne({ email });
-        if (userExists) {
-            return res.status(400).json({ message: "User already exists" });
-        }
+  if (!fullName || !email || !password || !otp) {
+    return res.status(400).json({ message: "All fields are required including OTP" });
+  }
 
-  if (!fullName || !email || !password) {
-    return res.status(400).json({ message: "All fields are required" });
+  // Verify OTP
+  const otpRecord = await otpModel.findOne({ email, otp });
+  if (!otpRecord) {
+    return res.status(400).json({ message: "Invalid or expired OTP" });
+  }
+
+  const userExists = await userModel.findOne({ email });
+  if (userExists) {
+    return res.status(400).json({ message: "User already exists" });
   }
 
   const user = await userModel.create({
@@ -27,6 +61,9 @@ export const registerUser = async (req, res, next) => {
     email,
     password: await userModel.hashPassword(password),
   });
+
+  // Clean up used OTP
+  await otpModel.deleteMany({ email });
 
   const token = user.generateToken();
   res.cookie("token", token);
@@ -48,7 +85,7 @@ export const loginUser = async(req,res,next) => {
 
       const user = await userModel.findOne({email}).select('+password');
 
-      if(!user) res.status(401).json({message: "Invalid Email or Password!"});
+      if(!user) return res.status(401).json({message: "Invalid Email or Password!"});
 
       const isMatch = await user.matchPassword(password);
 
