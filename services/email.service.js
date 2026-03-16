@@ -2,6 +2,16 @@ import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 dotenv.config();
 
+// Validate email environment variables at startup
+if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+  console.error(
+    "⚠️  WARNING: EMAIL_USER or EMAIL_PASS environment variables are not set!",
+    "\n  EMAIL_USER:", process.env.EMAIL_USER ? "✓ set" : "✗ MISSING",
+    "\n  EMAIL_PASS:", process.env.EMAIL_PASS ? "✓ set" : "✗ MISSING",
+    "\n  Emails will NOT be sent until these are configured."
+  );
+}
+
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -11,6 +21,12 @@ const transporter = nodemailer.createTransport({
 });
 
 export const sendOtpEmail = async (email, otp) => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    throw new Error(
+      "Email service is not configured. EMAIL_USER and EMAIL_PASS environment variables are required."
+    );
+  }
+
   const mailOptions = {
     from: `"Uber Clone" <${process.env.EMAIL_USER}>`,
     to: email,
@@ -29,5 +45,14 @@ export const sendOtpEmail = async (email, otp) => {
     `,
   };
 
-  await transporter.sendMail(mailOptions);
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log("✅ Email sent successfully to:", email, "MessageId:", info.messageId);
+    return info;
+  } catch (error) {
+    console.error("❌ Failed to send email to:", email);
+    console.error("  Error:", error.message);
+    console.error("  Code:", error.code);
+    throw error;
+  }
 };
