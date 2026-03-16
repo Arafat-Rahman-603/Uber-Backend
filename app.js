@@ -13,7 +13,7 @@ const app = express();
 
 
 app.use(cors({
-  origin: process.env.ORIGIN,
+  origin: "https://uber-beta-ten.vercel.app",
   credentials: true
 }));
 app.use(express.json());
