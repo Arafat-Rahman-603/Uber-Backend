@@ -14,8 +14,7 @@ const app = express();
 
 app.use(cors({
   origin: [
-    "http://localhost:5173",
-    "https://m743f7fs-5173.asse.devtunnels.ms"
+    process.env.ORIGIN
   ],
   credentials: true
 }));
