@@ -15,7 +15,10 @@ const app = express();
 
 
 app.use(cors({
-  origin: "https://uber-beta-ten.vercel.app",
+  origin: [
+    "https://uber-beta-ten.vercel.app",
+    "https://meek-panda-76d6c8.netlify.app"
+  ],
   methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
   allowedHeaders: ["Content-Type","Authorization"],
   credentials: true
