@@ -59,7 +59,8 @@ const riderSchema = new mongoose.Schema({
       default: "Point"
     },
     coordinates: {
-      type: [Number], // [lng, lat]
+      type: [Number],
+      default: [0, 0] // [lng, lat]
     }
   },
 
